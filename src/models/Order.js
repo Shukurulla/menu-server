@@ -20,9 +20,10 @@ const OrderSchema = new mongoose.Schema(
     comment: { type: String, default: '' },
     total: { type: Number, required: true },
     currencySymbol: { type: String, default: 'сум' },
+    clientId: { type: String, default: null, index: true },
     status: { type: String, enum: ['new', 'seen'], default: 'new', index: true },
     seenAt: { type: Date, default: null },
-    number: { type: Number }, // human-readable #1284
+    number: { type: Number },
   },
   { timestamps: true }
 );
