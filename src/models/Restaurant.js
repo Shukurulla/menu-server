@@ -31,6 +31,9 @@ const RestaurantSchema = new mongoose.Schema(
     notifTelegram: { type: Boolean, default: false },
     notifEmail: { type: Boolean, default: false },
 
+    // Web Push (FCM) — registered browser tokens for new-order notifications
+    fcmTokens: { type: [String], default: [] },
+
     status: { type: String, enum: ['active', 'pending', 'blocked'], default: 'active' },
   },
   { timestamps: true }

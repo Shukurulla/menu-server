@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const Food = require('../models/Food');
 const Order = require('../models/Order');
 const QRCode = require('qrcode');
+const { sendToRestaurant } = require('../utils/fcm');
 
 const router = express.Router();
 
@@ -87,7 +88,20 @@ router.post('/orders', async (req, res) => {
       number,
     });
 
-    // TODO: socket.io push to restaurant admin
+    // Web Push (FCM) — fire-and-forget
+    sendToRestaurant(rest, {
+      title: `Новый заказ · ${order.tableName}`,
+      body: `${validatedItems.length} ${validatedItems.length === 1 ? 'позиция' : 'позиций'} · ${order.total.toLocaleString('ru-RU')} ${order.currencySymbol}`,
+      tag: `order-${order._id}`,
+      link: '/restaurant/orders',
+      data: {
+        orderId: order._id.toString(),
+        orderNumber: order.number,
+        total: order.total,
+        tableName: order.tableName,
+      },
+    }).catch((e) => console.error('[fcm] new-order push failed:', e.message));
+
     res.status(201).json({
       id: order._id,
       number: order.number,

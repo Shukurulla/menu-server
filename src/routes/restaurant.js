@@ -186,6 +186,29 @@ router.post('/upload', upload.single('image'), (req, res) => {
   res.json({ url: '/uploads/foods/' + req.file.filename });
 });
 
+// === FCM TOKENS (web push) ===
+router.post('/fcm-token', async (req, res) => {
+  const { token } = req.body || {};
+  if (!token || typeof token !== 'string' || token.length < 20) {
+    return res.status(400).json({ error: 'token обязателен' });
+  }
+  const rest = await Restaurant.findById(req.user.id);
+  if (!rest) return res.status(404).json({ error: 'Не найдено' });
+  if (!rest.fcmTokens.includes(token)) {
+    rest.fcmTokens.push(token);
+    if (rest.fcmTokens.length > 20) rest.fcmTokens = rest.fcmTokens.slice(-20);
+    await rest.save();
+  }
+  res.json({ ok: true, count: rest.fcmTokens.length });
+});
+
+router.delete('/fcm-token', async (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'token обязателен' });
+  await Restaurant.findByIdAndUpdate(req.user.id, { $pull: { fcmTokens: token } });
+  res.json({ ok: true });
+});
+
 // === ORDERS ===
 router.get('/orders', async (req, res) => {
   const list = await Order.find({ restaurant: req.user.id }).sort({ createdAt: -1 }).limit(200);
