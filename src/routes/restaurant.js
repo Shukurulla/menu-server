@@ -176,7 +176,10 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
+    const mt = (file.mimetype || '').toLowerCase();
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const okExt = /\.(jpe?g|png|webp|gif|hei[cf]|avif|bmp|tiff?|svg|jfif)$/.test(ext);
+    if (mt.startsWith('image/') || okExt) cb(null, true);
     else cb(new Error('Только изображения'));
   },
 });
