@@ -164,16 +164,15 @@ router.delete('/foods/:id', async (req, res) => {
 const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
+const fsp = require('fs/promises');
+const sharp = require('sharp');
+const heicConvert = require('heic-convert');
 
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, '../../uploads/foods'),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    cb(null, crypto.randomBytes(12).toString('hex') + ext);
-  },
-});
+const UPLOAD_DIR = path.join(__dirname, '../../uploads/foods');
+
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const mt = (file.mimetype || '').toLowerCase();
@@ -184,9 +183,36 @@ const upload = multer({
   },
 });
 
-router.post('/upload', upload.single('image'), (req, res) => {
+async function decodeBuffer(buf, mimetype, originalName) {
+  const mt = (mimetype || '').toLowerCase();
+  const ext = path.extname(originalName || '').toLowerCase();
+  const isHeic = /heic|heif/.test(mt) || /\.(hei[cf])$/.test(ext);
+  if (!isHeic) return buf;
+  try {
+    return Buffer.from(await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.92 }));
+  } catch (e) {
+    // Fallback — sharp may have heif support compiled in
+    return buf;
+  }
+}
+
+router.post('/upload', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
-  res.json({ url: '/uploads/foods/' + req.file.filename });
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    const decoded = await decodeBuffer(req.file.buffer, req.file.mimetype, req.file.originalname);
+    const filename = crypto.randomBytes(12).toString('hex') + '.jpg';
+    const outPath = path.join(UPLOAD_DIR, filename);
+    await sharp(decoded)
+      .rotate()
+      .resize({ width: 1600, withoutEnlargement: true })
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toFile(outPath);
+    res.json({ url: '/uploads/foods/' + filename });
+  } catch (e) {
+    console.error('[upload] conversion failed:', e.message);
+    res.status(500).json({ error: 'Не удалось обработать изображение' });
+  }
 });
 
 // === FCM TOKENS (web push) ===
