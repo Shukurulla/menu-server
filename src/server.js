@@ -17,7 +17,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.options('*', cors());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '100mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.get('/', (req, res) => res.json({ ok: true, name: 'menu-backend' }));
