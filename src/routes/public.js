@@ -6,6 +6,7 @@ const Food = require('../models/Food');
 const Order = require('../models/Order');
 const QRCode = require('qrcode');
 const { sendToRestaurant } = require('../utils/fcm');
+const { haversineMeters, isValidCoord } = require('../utils/geo');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/menu/:restaurantId/:tableSlug', async (req, res) => {
 // Submit order
 router.post('/orders', async (req, res) => {
   try {
-    const { restaurantId, tableId, items, comment = '' } = req.body || {};
+    const { restaurantId, tableId, items, comment = '', lat, lng } = req.body || {};
     if (!restaurantId || !tableId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Неверные данные' });
     }
@@ -55,6 +56,26 @@ router.post('/orders', async (req, res) => {
 
     const table = await Table.findOne({ _id: tableId, restaurant: rest._id });
     if (!table) return res.status(404).json({ error: 'Стол не найден' });
+
+    // Geolocation gate — clients must always send coordinates. If the restaurant
+    // has set its own point + radius, the order must originate inside that radius.
+    if (!isValidCoord(lat, lng)) {
+      return res.status(400).json({ error: 'Геолокация обязательна. Разрешите доступ и попробуйте снова.', code: 'geo_required' });
+    }
+    const restLoc = rest.location || {};
+    const hasRestLoc = isValidCoord(restLoc.lat, restLoc.lng);
+    if (hasRestLoc) {
+      const distance = haversineMeters(restLoc.lat, restLoc.lng, lat, lng);
+      const radius = Number.isFinite(rest.radius) && rest.radius > 0 ? rest.radius : 200;
+      if (distance > radius) {
+        return res.status(403).json({
+          error: `Вы находитесь вне зоны ресторана (${Math.round(distance)} м). Закажите, находясь в ресторане.`,
+          code: 'geo_out_of_range',
+          distance: Math.round(distance),
+          radius,
+        });
+      }
+    }
 
     // Validate and calculate items
     const foodIds = items.map((i) => i.food);

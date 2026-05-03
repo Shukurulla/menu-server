@@ -26,9 +26,24 @@ router.patch('/me', async (req, res) => {
     'phone', 'phonePrefix', 'adminName',
     'currency', 'currencySymbol', 'phoneFormat', 'locale', 'timezone',
     'notifSound', 'notifTelegram', 'notifEmail',
+    'location', 'radius',
   ];
   const update = {};
   for (const k of allowed) if (k in req.body) update[k] = req.body[k];
+
+  if ('location' in update) {
+    const loc = update.location;
+    if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      update.location = { lat: loc.lat, lng: loc.lng };
+    } else {
+      update.location = { lat: null, lng: null };
+    }
+  }
+  if ('radius' in update) {
+    const r = Number(update.radius);
+    update.radius = Number.isFinite(r) ? Math.max(20, Math.min(50000, r)) : 200;
+  }
+
   const rest = await Restaurant.findByIdAndUpdate(req.user.id, update, { new: true }).select('-password');
   res.json(rest);
 });

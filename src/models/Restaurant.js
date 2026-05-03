@@ -22,6 +22,15 @@ const RestaurantSchema = new mongoose.Schema(
     phone: { type: String, default: '' },
     adminName: { type: String, default: '' },
 
+    // Geolocation — restaurant point and allowed delivery/order radius (meters).
+    // When location.lat/lng are set, public order submissions must come from
+    // within `radius` meters of the point (Haversine distance check).
+    location: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
+    radius: { type: Number, default: 200 },
+
     // Auth
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     password: { type: String, required: true }, // AES-encrypted
