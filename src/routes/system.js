@@ -97,9 +97,9 @@ router.post('/restaurants', async (req, res) => {
   }
 });
 
-// Update restaurant (system-level: region, status)
+// Update restaurant (system-level: region, status, location, radius)
 router.patch('/restaurants/:id', async (req, res) => {
-  const allowed = ['brandName', 'region', 'status', 'address', 'phone', 'logo'];
+  const allowed = ['brandName', 'region', 'status', 'address', 'phone', 'logo', 'location', 'radius'];
   const update = {};
   for (const k of allowed) if (k in req.body) update[k] = req.body[k];
 
@@ -111,6 +111,19 @@ router.patch('/restaurants/:id', async (req, res) => {
     update.currencySymbol = r.currencySymbol;
     update.locale = r.locale;
     update.timezone = r.timezone;
+  }
+
+  if ('location' in update) {
+    const loc = update.location;
+    if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      update.location = { lat: loc.lat, lng: loc.lng };
+    } else {
+      update.location = { lat: null, lng: null };
+    }
+  }
+  if ('radius' in update) {
+    const r = Number(update.radius);
+    update.radius = Number.isFinite(r) ? Math.max(20, Math.min(50000, r)) : 200;
   }
 
   const rest = await Restaurant.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
