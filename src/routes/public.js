@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Restaurant = require('../models/Restaurant');
 const Table = require('../models/Table');
 const Category = require('../models/Category');
@@ -23,11 +24,12 @@ router.get('/menu/:restaurantId/:tableSlug', async (req, res) => {
   const table = await Table.findOne({ restaurant: rest._id, slug: tableSlug });
   if (!table) return res.status(404).json({ error: 'Стол не найден' });
 
+  const restObjId = new mongoose.Types.ObjectId(rest._id);
   const [categories, foods, foodCounts] = await Promise.all([
     Category.find({ restaurant: rest._id }).sort({ order: 1 }),
     Food.find({ restaurant: rest._id, status: { $in: ['active', 'out'] } }).sort({ createdAt: -1 }),
     Order.aggregate([
-      { $match: { restaurant: rest._id } },
+      { $match: { restaurant: restObjId } },
       { $unwind: '$items' },
       { $group: { _id: '$items.food', count: { $sum: '$items.qty' } } },
     ]),
@@ -42,10 +44,15 @@ router.get('/menu/:restaurantId/:tableSlug', async (req, res) => {
     countByCategory.set(catId, (countByCategory.get(catId) || 0) + c);
   }
 
-  const sortedFoods = [...foods].sort((a, b) => {
-    const ca = countByFood.get(String(a._id)) || 0;
-    const cb = countByFood.get(String(b._id)) || 0;
-    if (cb !== ca) return cb - ca;
+  // Attach orderCount to each food so the client can filter "popular" reliably
+  const foodsWithCount = foods.map((f) => {
+    const o = f.toObject();
+    o.orderCount = countByFood.get(String(f._id)) || 0;
+    return o;
+  });
+
+  const sortedFoods = [...foodsWithCount].sort((a, b) => {
+    if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
 
