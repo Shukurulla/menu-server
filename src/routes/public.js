@@ -23,10 +23,38 @@ router.get('/menu/:restaurantId/:tableSlug', async (req, res) => {
   const table = await Table.findOne({ restaurant: rest._id, slug: tableSlug });
   if (!table) return res.status(404).json({ error: 'Стол не найден' });
 
-  const [categories, foods] = await Promise.all([
+  const [categories, foods, foodCounts] = await Promise.all([
     Category.find({ restaurant: rest._id }).sort({ order: 1 }),
     Food.find({ restaurant: rest._id, status: { $in: ['active', 'out'] } }).sort({ createdAt: -1 }),
+    Order.aggregate([
+      { $match: { restaurant: rest._id } },
+      { $unwind: '$items' },
+      { $group: { _id: '$items.food', count: { $sum: '$items.qty' } } },
+    ]),
   ]);
+
+  // Popularity-based sorting: most-ordered foods/categories first
+  const countByFood = new Map(foodCounts.map((c) => [String(c._id), c.count]));
+  const countByCategory = new Map();
+  for (const f of foods) {
+    const c = countByFood.get(String(f._id)) || 0;
+    const catId = String(f.category);
+    countByCategory.set(catId, (countByCategory.get(catId) || 0) + c);
+  }
+
+  const sortedFoods = [...foods].sort((a, b) => {
+    const ca = countByFood.get(String(a._id)) || 0;
+    const cb = countByFood.get(String(b._id)) || 0;
+    if (cb !== ca) return cb - ca;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  const sortedCategories = [...categories].sort((a, b) => {
+    const ca = countByCategory.get(String(a._id)) || 0;
+    const cb = countByCategory.get(String(b._id)) || 0;
+    if (cb !== ca) return cb - ca;
+    return (a.order || 0) - (b.order || 0);
+  });
 
   res.json({
     restaurant: {
@@ -38,8 +66,8 @@ router.get('/menu/:restaurantId/:tableSlug', async (req, res) => {
       locale: rest.locale,
     },
     table: { id: table._id, name: table.name, number: table.number, slug: table.slug, kind: table.kind },
-    categories,
-    foods,
+    categories: sortedCategories,
+    foods: sortedFoods,
   });
 });
 
